@@ -1,0 +1,14 @@
+config CONFIG_P_A5_TAB_REVA
+	bool "p_a5_tab_reva"
+	select SAMA5D2
+	select CONFIG_CPU_V7
+	select CONFIG_DDRC
+	select ALLOW_SDCARD
+	select ALLOW_CPU_CLK_348MHZ
+	select ALLOW_CPU_CLK_498MHZ
+	select ALLOW_CRYSTAL_12_000MHZ
+	select CONFIG_HAS_PMIC_ACT8865
+	select SUPPORT_BUS_SPEED_116MHZ
+	select SUPPORT_BUS_SPEED_166MHZ
+	help
+		Use the P-A5-TAB RevA board

@@ -33,6 +33,9 @@
 #include "debug.h"
 #include "pmc.h"
 
+//
+#include "arch/at91_pmc.h"
+#include "arch/at91_sfr.h"
 /*
  * Registers Definitions
  */
@@ -337,6 +340,11 @@ static void sdhc_set_power(void)
 
 	sdhc_writeb(SDMMC_PCR, value | SDMMC_PCR_SDBPWR);
 }
+//
+static inline unsigned int read_pmc(unsigned int offset)
+{
+	return readl(offset + AT91C_BASE_PMC);
+}
 
 static int sdhc_set_clock(struct sd_card *sdcard, unsigned int clock)
 {
@@ -397,11 +405,8 @@ static int sdhc_set_clock(struct sd_card *sdcard, unsigned int clock)
 	if (!timeout)
 		dbg_info("SDHC: Timeout waiting for internal clock ready\n");
 
-	//dbg_info("The MAINCK frequency sdhc: %d\n", readl(0x24 + 0xf0014000));
-	//dbg_info("OSCSEL: %d\n", readl(0xF8048050));
-	//dbg_info("MOSCSEL2: %d\n", readl(0x20 + 0xf0014000));
-
 	sdhc_writew(SDMMC_CCR, sdhc_readw(SDMMC_CCR) | SDMMC_CCR_SDCLKEN);
+	dbg_info("The MAINCK frequency: %d\n", read_pmc(PMC_MCFR));
 	reg = sdhc_readb(SDMMC_HC1R);
 	if (clock > 26000000)
 		reg |= SDMMC_HC1R_HSEN;
@@ -473,67 +478,18 @@ static int sdhc_host_capability(struct sd_card *sdcard)
 	return 0;
 }
 
-static int sdhc_is_card_inserted(struct sd_card *sdcard)
-{
-	/*
-	 * Debouncing of the card detect pin is up to 13ms on sama5d2 rev B
-	 * and later.
-	 * Try to be safe and wait for up to 50ms (50000µs). Let assume
-	 * the PCK (processor clock) frequency is 500MHz, hence 500 cycles/µs.
-	 * 500 * 50000 = 25000000 cycles.
-	 */
-	unsigned int timeout = 25000000;
-	int is_inserted = 0;
-
-	/*
-	 * Enable (unmask) the 'card inserted' bit in the Normal Interrupt
-	 * Status Register.
-	 */
-	sdhc_writew(SDMMC_NISTER, SDMMC_NISTR_CINS);
-
-	/*
-	 * Check whether the 'card inserted' bit is already set in
-	 * the Present State Register.
-	 */
-	if (sdhc_readl(SDMMC_PSR) & SDMMC_PSR_CARDINS) {
-		is_inserted = 1;
-		goto exit;
-	}
-
-	/* Poll the Normal Interrupt Status Register for bit 'card inserted'. */
-	while (!(sdhc_readw(SDMMC_NISTR) & SDMMC_NISTR_CINS) &&
-	       timeout--);
-
-	is_inserted = !!(sdhc_readw(SDMMC_NISTR) & SDMMC_NISTR_CINS);
-
-exit:
-	/*
-	 * Disable (mask) the 'card inserted' bit in the Normal Interrupt
-	 * Status Register.
-	 */
-	sdhc_writew(SDMMC_NISTER, 0);
-
-	/* Clear the pending 'card inserted' interrupt. */
-	sdhc_writew(SDMMC_NISTR, SDMMC_NISTR_CINS);
-
-	return is_inserted;
-}
-
 static int sdhc_init(struct sd_card *sdcard)
 {
-	unsigned int normal_status_mask, error_status_mask;
+	unsigned int normal_status_mask, error_status_mask, card_detect_mask;
+	unsigned int timeout;
 	const unsigned int FCD_SETTING = sdhc_readb(SDMMC_MC1R) & SDMMC_MC1R_FCD;
+
 	sdhc_softare_reset();
 	if( FCD_SETTING ) { sdhc_writeb(SDMMC_MC1R, FCD_SETTING); }
 
 	sdhc_set_power();
 
 	sdhc_host_capability(sdcard);
-
-	if (sdhc_is_card_inserted(sdcard) <= 0) {
-		dbg_info("SDHC: Error: No Card Inserted\n");
-		return -1;
-	}
 
 	normal_status_mask = SDMMC_NISTR_CMDC
 				| SDMMC_NISTR_TRFC
@@ -552,6 +508,29 @@ static int sdhc_init(struct sd_card *sdcard)
 
 	sdhc_writew(SDMMC_NISIER, 0);
 	sdhc_writew(SDMMC_EISIER, 0);
+
+
+	/*
+	 * To be totally safe, three bits have to be checked at the same time.
+	 * CARDDPL and CARDINS must have the same value even if CARDSS is set.
+	 * The debounce can start up to 2 slow clock cycles after the card
+	 * insertion or removal. It means the card can be removed and we can
+	 * have CARDSS and CARDINS set to 1.
+	 */
+	card_detect_mask = SDMMC_PSR_CARDDPL |
+			   SDMMC_PSR_CARDSS |
+			   SDMMC_PSR_CARDINS;
+
+	timeout = 1000000;
+	while (!!(timeout--) &&
+	       !((sdhc_readl(SDMMC_PSR) &
+	       card_detect_mask) == card_detect_mask))
+		;
+
+	if (!timeout) {
+		dbg_info("SDHC: Error: No Card Inserted\n");
+		return -1;
+	}
 
 	sdhc_set_clock(sdcard, 400000);
 	sdhc_set_bus_width(sdcard, 1);
@@ -684,6 +663,7 @@ static int sdhc_send_command(struct sd_command *sd_cmd, struct sd_data *data)
 		dbg_info("SDHC: Timeout waiting for command complete\n");
 
 	sdhc_writew(SDMMC_NISTR, normal_status);
+
 	if ((normal_status & normal_status_mask) == normal_status_mask) {
 		if (sd_cmd->resp_type == SD_RESP_TYPE_R2) {
 			for (i = 0; i < 4; i++)

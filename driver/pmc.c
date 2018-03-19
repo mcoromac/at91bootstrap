@@ -48,6 +48,8 @@ static inline unsigned int read_pmc(unsigned int offset)
 void lowlevel_clock_init()
 {
 	unsigned long tmp;
+	*(volatile unsigned long*)0xF8048050UL = 1 << 3;
+	for( tmp = 3000 ; tmp > 0 ; --tmp);
 
 	/*
 	 * Switch the master clock to the slow clock without modifying other

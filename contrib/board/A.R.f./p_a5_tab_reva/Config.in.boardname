@@ -1,0 +1,2 @@
+config CONFIG_BOARDNAME
+	default "p_a5_tab_reva"		if CONFIG_P_A5_TAB_REVA

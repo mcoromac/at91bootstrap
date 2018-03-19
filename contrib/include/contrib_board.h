@@ -57,4 +57,8 @@
 #include "sama5d3_linea.h"
 #endif
 
+#ifdef CONFIG_P_A5_TAB_REVA
+#include "p_a5_tab_reva.h"
+#endif
+
 #endif

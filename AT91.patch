@@ -1,0 +1,89 @@
+diff --git a/contrib/board/Config.in.board b/contrib/board/Config.in.board
+index 2c67225..9fb579d 100644
+--- a/contrib/board/Config.in.board
++++ b/contrib/board/Config.in.board
+@@ -8,3 +8,4 @@ source "contrib/board/acme/sama5d3_acqua/Config.in.board"
+ source "contrib/board/acme/sama5d2_roadrunner/Config.in.board"
+ source "contrib/board/corewind/core9g25/Config.in.board"
+ source "contrib/board/axentia/sama5d3_linea/Config.in.board"
++source "contrib/board/A.R.f./p_a5_tab_reva/Config.in.board"
+diff --git a/contrib/board/Config.in.boardname b/contrib/board/Config.in.boardname
+index fe843fe..a067e7b 100644
+--- a/contrib/board/Config.in.boardname
++++ b/contrib/board/Config.in.boardname
+@@ -8,3 +8,4 @@ source "contrib/board/acme/sama5d3_acqua/Config.in.boardname"
+ source "contrib/board/acme/sama5d2_roadrunner/Config.in.boardname"
+ source "contrib/board/corewind/core9g25/Config.in.boardname"
+ source "contrib/board/axentia/sama5d3_linea/Config.in.boardname"
++source "contrib/board/A.R.f./p_a5_tab_reva/Config.in.boardname"
+diff --git a/contrib/board/Config.in.linux_arg b/contrib/board/Config.in.linux_arg
+index b580d53..5796e92 100644
+--- a/contrib/board/Config.in.linux_arg
++++ b/contrib/board/Config.in.linux_arg
+@@ -8,3 +8,4 @@ source "contrib/board/acme/sama5d3_acqua/Config.in.linux_arg"
+ source "contrib/board/acme/sama5d2_roadrunner/Config.in.linux_arg"
+ source "contrib/board/corewind/core9g25/Config.in.linux_arg"
+ source "contrib/board/axentia/sama5d3_linea/Config.in.linux_arg"
++source "contrib/board/A.R.f./p_a5_tab_reva/Config.in.linux_arg"
+diff --git a/contrib/include/contrib_board.h b/contrib/include/contrib_board.h
+index ad04326..b1df071 100644
+--- a/contrib/include/contrib_board.h
++++ b/contrib/include/contrib_board.h
+@@ -57,4 +57,8 @@
+ #include "sama5d3_linea.h"
+ #endif
+ 
++#ifdef CONFIG_P_A5_TAB_REVA
++#include "p_a5_tab_reva.h"
++#endif
++
+ #endif
+diff --git a/driver/pmc.c b/driver/pmc.c
+index 7603ce2..5542c7e 100644
+--- a/driver/pmc.c
++++ b/driver/pmc.c
+@@ -48,6 +48,8 @@ static inline unsigned int read_pmc(unsigned int offset)
+ void lowlevel_clock_init()
+ {
+ 	unsigned long tmp;
++	*(volatile unsigned long*)0xF8048050UL = 1 << 3;
++	for( tmp = 3000 ; tmp > 0 ; --tmp);
+ 
+ 	/*
+ 	 * Switch the master clock to the slow clock without modifying other
+diff --git a/driver/sdhc.c b/driver/sdhc.c
+index 398f83c..27f67a3 100644
+--- a/driver/sdhc.c
++++ b/driver/sdhc.c
+@@ -397,8 +397,11 @@ static int sdhc_set_clock(struct sd_card *sdcard, unsigned int clock)
+ 	if (!timeout)
+ 		dbg_info("SDHC: Timeout waiting for internal clock ready\n");
+ 
+-	sdhc_writew(SDMMC_CCR, sdhc_readw(SDMMC_CCR) | SDMMC_CCR_SDCLKEN);
++	//dbg_info("The MAINCK frequency sdhc: %d\n", readl(0x24 + 0xf0014000));
++	//dbg_info("OSCSEL: %d\n", readl(0xF8048050));
++	//dbg_info("MOSCSEL2: %d\n", readl(0x20 + 0xf0014000));
+ 
++	sdhc_writew(SDMMC_CCR, sdhc_readw(SDMMC_CCR) | SDMMC_CCR_SDCLKEN);
+ 	reg = sdhc_readb(SDMMC_HC1R);
+ 	if (clock > 26000000)
+ 		reg |= SDMMC_HC1R_HSEN;
+@@ -519,8 +522,9 @@ exit:
+ static int sdhc_init(struct sd_card *sdcard)
+ {
+ 	unsigned int normal_status_mask, error_status_mask;
+-
++	const unsigned int FCD_SETTING = sdhc_readb(SDMMC_MC1R) & SDMMC_MC1R_FCD;
+ 	sdhc_softare_reset();
++	if( FCD_SETTING ) { sdhc_writeb(SDMMC_MC1R, FCD_SETTING); }
+ 
+ 	sdhc_set_power();
+ 
+@@ -680,7 +684,6 @@ static int sdhc_send_command(struct sd_command *sd_cmd, struct sd_data *data)
+ 		dbg_info("SDHC: Timeout waiting for command complete\n");
+ 
+ 	sdhc_writew(SDMMC_NISTR, normal_status);
+-
+ 	if ((normal_status & normal_status_mask) == normal_status_mask) {
+ 		if (sd_cmd->resp_type == SD_RESP_TYPE_R2) {
+ 			for (i = 0; i < 4; i++)
