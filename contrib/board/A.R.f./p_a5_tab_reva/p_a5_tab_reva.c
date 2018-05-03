@@ -17,13 +17,12 @@
 #include "arch/at91_rstc.h"
 #include "arch/tz_matrix.h"
 
-
-static void at91_dbgu_hw_init(void)
+static void at91_dbgu_hw_init2(void)
 {
 	const struct pio_desc dbgu_pins[] = {
-		{"RXD1", CONFIG_SYS_DBGU_RXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_D},
-		{"TXD1", CONFIG_SYS_DBGU_TXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_D},
-		{(char *)0, 0, 0, PIO_DEFAULT, PIO_PERIPH_D},
+		{"RXD1", CONFIG_SYS_DBGU_RXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_A},
+		{"TXD1", CONFIG_SYS_DBGU_TXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_A},
+		{(char *)0, 0, 0, PIO_DEFAULT, PIO_PERIPH_A},
 	};
 
 	pmc_sam9x5_enable_periph_clk(CONFIG_SYS_DBGU_ID);
@@ -31,11 +30,24 @@ static void at91_dbgu_hw_init(void)
 	pio_configure(dbgu_pins);
 }
 
+static void at91_dbgu_hw_init(void)
+{
+	const struct pio_desc dbgu_pins[] = {
+		{"RXD1", CONFIG_SYS_DBGU_RXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_A},
+		{"TXD1", CONFIG_SYS_DBGU_TXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_A},
+		{(char *)0, 0, 0, PIO_DEFAULT, PIO_PERIPH_A},
+	};
+
+	pmc_sam9x5_enable_periph_clk(CONFIG_SYS_DBGU_ID);
+	*(volatile unsigned int*)AT91C_BASE_FLEXCOM1 = 1;
+	pio_configure(dbgu_pins);
+}
+
 static void initialize_dbgu(void)
 {
 	const unsigned int baudrate = 115200;
 
-	at91_dbgu_hw_init();
+	at91_dbgu_hw_init2();
 
 	if (pmc_check_mck_h32mxdiv())
 		usart_init(BAUDRATE(MASTER_CLOCK / 2, baudrate));
