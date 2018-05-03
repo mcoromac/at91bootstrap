@@ -23,7 +23,7 @@ static void at91_dbgu_hw_init(void)
 	const struct pio_desc dbgu_pins[] = {
 		{"RXD1", CONFIG_SYS_DBGU_RXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_D},
 		{"TXD1", CONFIG_SYS_DBGU_TXD_PIN, 0, PIO_DEFAULT, PIO_PERIPH_D},
-		{(char *)0, 0, 0, PIO_DEFAULT, PIO_PERIPH_A},
+		{(char *)0, 0, 0, PIO_DEFAULT, PIO_PERIPH_D},
 	};
 
 	pmc_sam9x5_enable_periph_clk(CONFIG_SYS_DBGU_ID);
